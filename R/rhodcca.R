@@ -2,11 +2,12 @@
 #'
 #' Calculate rhodcca
 #'
-#' @param series1
-#' @param series2
-#' @param scale_min
-#' @param scale_max
-#' @param order
+#' @param series1 numeric vector
+#' @param series2 numeric vector
+#' @param scale_min an integer indicating the minimum scale to be resovled
+#' @param scale_max an integer indicating the maximum scale to be resovled
+#' @param order is an integer indicating the polynomial order used for
+#' detrending the local windows (e.g, 1 = linear, 2 = quadratic, etc.).
 #' @param scale_ratio a double indicating the ratio by which scale successive
 #' scales. For example, scale_ratio = 2 would create a scales increasing by
 #' a power of 2.
