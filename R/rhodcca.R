@@ -26,8 +26,6 @@ rhodcca <- function(
   order = 1,
   scale_ratio = 1.05
 ) {
-  requireNamespace(rhodcca)
-
   if (length(series1) != length(series2)) {
     stop
   }
