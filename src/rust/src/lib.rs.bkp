@@ -1,0 +1,97 @@
+use extendr_api::prelude::*;
+use nalgebra::{DMatrix, DVector};
+
+// -----------------------------------------------------------------
+// Funções Auxiliares - Agora operam 100% com o tipo nativo f64
+// -----------------------------------------------------------------
+
+/// Constrói a matriz de base de polinômios. Trabalha com f64.
+fn vandermonde(n: usize, m: usize) -> DMatrix<f64> {
+    let mut t = DMatrix::<f64>::zeros(n, m + 1);
+    for i in 0..n {
+        let x = i as f64 + 1.0;
+        let mut p = 1.0;
+        for j in 0..=m {
+            t[(i, j)] = p;
+            p *= x;
+        }
+    }
+    t
+}
+
+/// Calcula resíduos. Trabalha com f64.
+fn residuals_from_lstsq(t: &DMatrix<f64>, y: &DVector<f64>) -> Result<DVector<f64>> {
+    let svd = t.clone().svd(true, true);
+
+    let beta = svd.solve(y, 1.0e-14)
+        .map_err(|e| Error::Other(format!("Falha na resolução por SVD: {e}")))?;
+
+    let fitted = t * &beta;
+    Ok(y - &fitted)
+}
+
+// -----------------------------------------------------------------
+// Função Principal Exportada para o R
+// -----------------------------------------------------------------
+
+///' Detrenda e estima variâncias e covariância dos resíduos.
+///'
+///' @param x vetor numérico.
+///' @param y vetor numérico (mesmo tamanho de `x`).
+///' @param m grau do polinômio de tendência (m >= 0).
+///' @return vetor numérico de tamanho 3: c(f2x, f2y, f2xy).
+/// @export
+#[extendr]
+fn detrend_cov(x: Doubles, y: Doubles, m: i32) -> Result<Robj> {
+    // --- Validações ---
+    let n = x.len();
+    if n == 0 || y.len() != n {
+        return Err(Error::Other(format!("Vetores com comprimentos incompatíveis (x={}, y={}).", n, y.len())));
+    }
+    if n < 2 {
+        return Err(Error::Other("É necessário n >= 2 para divisor (n-1).".into()));
+    }
+    if m < 0 {
+        return Err(Error::Other("m deve ser >= 0.".into()));
+    }
+    let m = m as usize;
+
+    // --- Camada de Tradução: R (Rfloat) -> Rust (f64) ---
+    // Convertemos os dados de Rfloat para f64 antes de qualquer cálculo.
+    let x_f64: Vec<f64> = x.iter().map(|r| r.inner()).collect();
+    let y_f64: Vec<f64> = y.iter().map(|r| r.inner()).collect();
+
+    // Criamos os vetores nalgebra a partir dos dados f64 convertidos.
+    let x_vec = DVector::from_vec(x_f64);
+    let y_vec = DVector::from_vec(y_f64);
+
+    // --- Lógica de Cálculo (agora usando apenas f64) ---
+    let t = vandermonde(n, m);
+    let residx = residuals_from_lstsq(&t, &x_vec)?;
+    let residy = residuals_from_lstsq(&t, &y_vec)?;
+
+    let denom = (n as f64) - 1.0;
+    if !denom.is_finite() || denom <= 0.0 {
+        return Err(Error::Other("Divisor inválido (n-1).".into()));
+    }
+
+    let f2x = residx.norm_squared() / denom;
+    let f2y = residy.norm_squared() / denom;
+    let f2xy = residx.dot(&residy) / denom;
+
+    // --- Retorno para o R ---
+    // O `r!` lida com a conversão de Vec<f64> para um vetor numérico do R.
+    Ok(r!(vec![f2x, f2y, f2xy]))
+}
+
+/// @export
+#[extendr]
+fn dcca(){
+    println!("TODO!");
+}
+
+extendr_module! {
+    mod rhodcca;
+    fn detrend_cov;
+    fn dcca;
+}
